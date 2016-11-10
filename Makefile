@@ -77,6 +77,9 @@ strip : $(PRODUCTS)
 	strip $(PRODUCTS)
 	rm -rf $(JUNK)
 
+.PHONY: test
+test: $(COMPILER)
+	@./test.sh
 
 # make depend will set up the header file dependencies for the
 # assignment.  You should make depend whenever you add a new header
