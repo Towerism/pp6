@@ -34,4 +34,7 @@ cat defs.asm >> tmp.asm
 
 $SPIM -file tmp.asm
 
+rm -f tmp.asm
+rm -f tmp.errors
+
 exit 0;
