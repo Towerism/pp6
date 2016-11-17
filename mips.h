@@ -44,6 +44,7 @@ private:
   void SpillRegister(Location *dst, Register reg);
   void SpillRegisters();
   void SpillFallbackRegisters();
+  Register AllocateRegister(Location *loc, bool setDirty = false);
   Register GetRegister(Location *loc);
   void FillRegister(Location *src, Register reg);
   void SetRegisterDirty(Register reg) { regs[reg].isDirty = true; }

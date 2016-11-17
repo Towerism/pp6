@@ -71,6 +71,17 @@ void Mips::SpillFallbackRegisters()
     SpillRegister(regs[r].var, r);
 }
 
+Mips::Register Mips::AllocateRegister(Location *loc, bool setDirty) {
+  Register r = GetRegister(loc);
+  if (regs[r].var != loc) {
+    FillRegister(loc, r);
+    SetRegisterLocation(r, loc);
+  }
+  if (setDirty)
+    SetRegisterDirty(r);
+  return r;
+}
+
 Mips::Register Mips::GetRegister(Location *loc)
 {
   if (loc != NULL) {
@@ -130,9 +141,7 @@ void Mips::Emit(const char *fmt, ...)
  */
 void Mips::EmitLoadConstant(Location *dst, int val)
 {
-  Register r = GetRegister(dst);
-  SetRegisterDirty(r);
-  SetRegisterLocation(r, dst);
+  Register r = AllocateRegister(dst, true);
   Emit("li %s, %d\t\t# load constant value %d into %s", regs[r].name,
        val, val, regs[r].name);
   SpillRegister(dst, r);
@@ -164,9 +173,7 @@ void Mips::EmitLoadStringConstant(Location *dst, const char *str)
  */
 void Mips::EmitLoadLabel(Location *dst, const char *label)
 {
-  Register r = GetRegister(dst);
-  SetRegisterDirty(r);
-  SetRegisterLocation(r, dst);
+  Register r = AllocateRegister(dst, true);
   Emit("la %s, %s\t# load label", regs[r].name, label);
   SpillRegister(dst, r);
 }
@@ -179,14 +186,7 @@ void Mips::EmitLoadLabel(Location *dst, const char *label)
  */
 void Mips::EmitCopy(Location *dst, Location *src)
 {
-  Register r = GetRegister(src);
-  if (regs[r].var != src) {
-    FillRegister(src, r);
-    SetRegisterLocation(r, dst);
-  }
-  else
-    SpillRegister(src, r);
-  SetRegisterDirty(r);
+  Register r = AllocateRegister(src, true);
   SetRegisterLocation(r, dst);
   SpillFallbackRegisters();
 }
@@ -202,16 +202,10 @@ void Mips::EmitCopy(Location *dst, Location *src)
  */
 void Mips::EmitLoad(Location *dst, Location *reference, int offset)
 {
-  Register r1 = GetRegister(reference);
-  if (regs[r1].var != reference) {
-    FillRegister(reference, r1);
-    SetRegisterLocation(r1, reference);
-  }
-  Register r2 = GetRegister(dst);
+  Register r1 = AllocateRegister(reference);
+  Register r2 = AllocateRegister(dst, true);
   Emit("lw %s, %d(%s) \t# load with offset", regs[r2].name,
        offset, regs[r1].name);
-  SetRegisterLocation(r2, dst);
-  SetRegisterDirty(r2);
   SpillFallbackRegisters();
 }
 
@@ -226,17 +220,8 @@ void Mips::EmitLoad(Location *dst, Location *reference, int offset)
  */
 void Mips::EmitStore(Location *reference, Location *value, int offset)
 {
-  Register r1 = GetRegister(value);
-  if (regs[r1].var != value) {
-    SetRegisterLocation(r1, value);
-    FillRegister(value, r1);
-  }
-  Register r2 = GetRegister(reference);
-  if (regs[r2].var != reference) {
-    SetRegisterDirty(r2);
-    SetRegisterLocation(r2, reference);
-    FillRegister(reference, r2);
-  }
+  Register r1 = AllocateRegister(value);
+  Register r2 = AllocateRegister(reference, true);
   Emit("sw %s, %d(%s) \t# store with offset",
        regs[r1].name, offset, regs[r2].name);
   SpillFallbackRegisters();
@@ -254,21 +239,12 @@ void Mips::EmitStore(Location *reference, Location *value, int offset)
 void Mips::EmitBinaryOp(BinaryOp::OpCode code, Location *dst,
                         Location *op1, Location *op2)
 {
-  Register r1 = GetRegister(op1);
-  if (regs[r1].var != op1) {
-    SetRegisterLocation(r1, op1);
-    FillRegister(op1, r1);
-  }
-  Register r2 = GetRegister(op2);
-  if (regs[r2].var != op2) {
-    SetRegisterLocation(r2, op2);
-    FillRegister(op2, r2);
-  }
-  Register r3 = GetRegister(NULL);
+  Register r1 = AllocateRegister(op1);
+  Register r2 = AllocateRegister(op2);
+  Register r3 = AllocateRegister(NULL, true);
+  SetRegisterLocation(r3, dst);
   Emit("%s %s, %s, %s\t", NameForTac(code), regs[r3].name,
        regs[r1].name, regs[r2].name);
-  SetRegisterDirty(r3);
-  SetRegisterLocation(r3, dst);
   SpillRegisters();
 }
 
@@ -310,12 +286,7 @@ void Mips::EmitGoto(const char *label)
  */
 void Mips::EmitIfZ(Location *test, const char *label)
 {
-  Register r = GetRegister(test);
-  if (regs[r].var != test) {
-    FillRegister(test, r);
-    SetRegisterDirty(r);
-    SetRegisterLocation(r, test);
-  }
+  Register r = AllocateRegister(test, true);
   Emit("beqz %s, %s\t# branch if %s is zero ", regs[r].name, label,
        test->GetName());
   SpillFallbackRegisters();
@@ -332,9 +303,7 @@ void Mips::EmitIfZ(Location *test, const char *label)
 void Mips::EmitParam(Location *arg)
 {
   Emit("subu $sp, $sp, 4\t# decrement sp to make space for param");
-  Register r = GetRegister(arg);
-  if (regs[r].var != arg)
-    FillRegister(arg, r);
+  Register r = AllocateRegister(arg);
   Emit("sw %s, 4($sp)\t# copy param value to stack", regs[r].name);
 }
 
@@ -355,11 +324,9 @@ void Mips::EmitCallInstr(Location *result, const char *fn, bool isLabel)
   SpillRegisters();
   Emit("%s %-15s\t# jump to function", isLabel? "jal": "jalr", fn);
   if (result != NULL) {
-    Register r = GetRegister(result);
+    Register r = AllocateRegister(result, true);
     Emit("move %s, %s\t\t# copy function return value from $v0",
          regs[r].name, regs[v0].name);
-    SetRegisterDirty(r);
-    SetRegisterLocation(r, result);
   }
 }
 
@@ -371,9 +338,7 @@ void Mips::EmitLCall(Location *dst, const char *label)
 
 void Mips::EmitACall(Location *dst, Location *fn)
 {
-  Register r = GetRegister(fn);
-  if (regs[r].var != fn)
-    FillRegister(fn, r);
+  Register r = AllocateRegister(fn);
   EmitCallInstr(dst, regs[r].name, false);
 }
 
@@ -407,9 +372,7 @@ void Mips::EmitReturn(Location *returnVal)
 {
   if (returnVal != NULL)
     {
-      Register r = GetRegister(returnVal);
-      if (regs[r].var != returnVal)
-        FillRegister(returnVal, r);
+      Register r = AllocateRegister(returnVal);
       Emit("move $v0, %s\t\t# assign return value into $v0",
            regs[r].name);
     }
