@@ -1,4 +1,4 @@
-/* File: mips.cc
+ /* File: mips.cc
  * -------------
  * Implementation of Mips class, which is responsible for TAC->MIPS
  * translation, register allocation, etc.
@@ -37,6 +37,11 @@ static bool LocationsAreSame(Location *var1, Location *var2)
            && var1->GetOffset() == var2->GetOffset()));
 }
 
+/* Method: SpillRegister
+ * ---------------------
+ * Used to spill a register from reg to dst.  All it does is emit a store
+ * from that register to its location on the stack.
+ */
 void Mips::SpillRegister(Location *dst, Register reg)
 {
   if (!dst)
@@ -51,20 +56,12 @@ void Mips::SpillRegister(Location *dst, Register reg)
   ResetRegister(reg);
 }
 
-/* Method: SpillRegisters
- * -------------------------
- * Used to spill all registers t0-t9
- */
 void Mips::SpillRegisters()
 {
   for (Register r = t0; r <= t9; r = Register(r + 1))
     SpillRegister(regs[r].var, r);
 }
 
-/* Method: SpillFallbackRegisters
- * ---------------------------
- * Used to spill registers t0-t2
- */
 void Mips::SpillFallbackRegisters()
 {
   for (Register r = t0; r <= t2; r = Register(r + 1))
