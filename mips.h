@@ -50,7 +50,7 @@ private:
   void SetRegisterDirty(Register reg) { regs[reg].isDirty = true; }
   void SetRegisterClean(Register reg) { regs[reg].isDirty = false; }
   void SetRegisterLocation(Register reg, Location *loc) { regs[reg].var = loc; }
-  void ResetRegister(Register reg) { SetRegisterDirty(reg), SetRegisterLocation(reg, NULL); }
+  void ResetRegister(Register reg) { SetRegisterClean(reg), SetRegisterLocation(reg, NULL); }
 
   void EmitCallInstr(Location *dst, const char *fn, bool isL);
 

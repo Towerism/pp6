@@ -46,7 +46,7 @@ void Mips::SpillRegister(Location *dst, Register reg)
 {
   if (!dst)
     return;
-  if (regs[reg].isDirty || dst != regs[reg].var) {
+  if (regs[reg].isDirty) {
     const char *offsetFromWhere = dst->GetSegment() == fpRelative? regs[fp].name : regs[gp].name;
     Assert(dst->GetOffset() % 4 == 0); // all variables are 4 bytes in size
     Emit("sw %s, %d(%s)\t# spill %s from %s to %s%+d", regs[reg].name,
@@ -183,7 +183,7 @@ void Mips::EmitLoadLabel(Location *dst, const char *label)
  */
 void Mips::EmitCopy(Location *dst, Location *src)
 {
-  Register r1 = AllocateRegister(src, false);
+  Register r1 = AllocateRegister(src);
   Register r2 = AllocateRegister(dst, true);
   Emit("move %s, %s\t#copy", regs[r2].name, regs[r1].name);
   SpillFallbackRegisters();
