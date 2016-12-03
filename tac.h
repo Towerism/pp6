@@ -26,7 +26,6 @@
 #include "list.h" // for VTable
 class Mips;
 
-
 // A Location object is used to identify the operands to the
 // various TAC instructions. A Location is either fp or gp
 // relative (depending on whether in stack or global segemnt)
@@ -35,33 +34,31 @@ class Mips;
 // variable in a function would be assigned a Location object
 // with name "num", segment fpRelative, and offset -8.
 
-typedef enum {fpRelative, gpRelative} Segment;
+typedef enum { fpRelative, gpRelative } Segment;
 
-class Location
-{
+class Location {
 protected:
   const char *variableName;
   Segment segment;
   int offset;
-  Location* base;
+  Location *base;
   int refOffset;
   bool isReference;
 
 public:
   Location(Segment seg, int offset, const char *name);
-  Location(Location *base_ptr, int refOff) :
-    variableName(base_ptr->variableName), segment(base_ptr->segment),
-    offset(base_ptr->offset), base(base_ptr), refOffset(refOff), isReference(true) {}
+  Location(Location *base_ptr, int refOff)
+      : variableName(base_ptr->variableName), segment(base_ptr->segment),
+        offset(base_ptr->offset), base(base_ptr), refOffset(refOff),
+        isReference(true) {}
 
-  const char *GetName() const     { return variableName; }
-  Segment GetSegment() const      { return segment; }
-  int GetOffset() const           { return offset; }
-  Location* GetBase() const       { return base; }
-  bool IsReference() const        { return isReference; }
-  int GetRefOffset() const        { return refOffset; }
+  const char *GetName() const { return variableName; }
+  Segment GetSegment() const { return segment; }
+  int GetOffset() const { return offset; }
+  Location *GetBase() const { return base; }
+  bool IsReference() const { return isReference; }
+  int GetRefOffset() const { return refOffset; }
 };
-
-
 
 // base class from which all Tac instructions derived
 // has the interface for the 2 polymorphic messages: Print & Emit
@@ -75,8 +72,6 @@ public:
   virtual void EmitSpecific(Mips *mips) = 0;
   void Emit(Mips *mips);
 };
-
-
 
 // for convenience, the instruction classes are listed here.
 // the interfaces for the classes follows below
@@ -100,98 +95,120 @@ class LCall;
 class ACall;
 class VTable;
 
-
-
-class LoadConstant: public Instruction {
+class LoadConstant : public Instruction {
   Location *dst;
   int val;
+
 public:
   LoadConstant(Location *dst, int val);
+  Location *GetLocation() const { return dst; }
   void EmitSpecific(Mips *mips);
 };
 
-class LoadStringConstant: public Instruction {
+class LoadStringConstant : public Instruction {
   Location *dst;
   char *str;
+
 public:
   LoadStringConstant(Location *dst, const char *s);
+  Location *GetLocation() const { return dst; }
   void EmitSpecific(Mips *mips);
 };
 
-class LoadLabel: public Instruction {
+class LoadLabel : public Instruction {
   Location *dst;
   const char *label;
+
 public:
   LoadLabel(Location *dst, const char *label);
+  Location *GetLocation() const { return dst; }
   void EmitSpecific(Mips *mips);
 };
 
-class Assign: public Instruction {
+class Assign : public Instruction {
   Location *dst, *src;
+
 public:
   Assign(Location *dst, Location *src);
   void EmitSpecific(Mips *mips);
+  Location *GetDestination() const { return dst; }
+  Location *GetSource() const { return src; }
 };
 
-class Load: public Instruction {
+class Load : public Instruction {
   Location *dst, *src;
   int offset;
+
 public:
   Load(Location *dst, Location *src, int offset = 0);
   void EmitSpecific(Mips *mips);
+  Location *GetDestination() const { return dst; }
+  Location *GetSource() const { return src; }
 };
 
-class Store: public Instruction {
+class Store : public Instruction {
   Location *dst, *src;
   int offset;
+
 public:
   Store(Location *d, Location *s, int offset = 0);
   void EmitSpecific(Mips *mips);
+  Location *GetDestination() const { return dst; }
+  Location *GetSource() const { return src; }
 };
 
-class BinaryOp: public Instruction {
+class BinaryOp : public Instruction {
 
 public:
-  typedef enum {Add, Sub, Mul, Div, Mod, Eq, Less, And, Or, NumOps} OpCode;
-  static const char * const opName[NumOps];
+  typedef enum { Add, Sub, Mul, Div, Mod, Eq, Less, And, Or, NumOps } OpCode;
+  static const char *const opName[NumOps];
   static OpCode OpCodeForName(const char *name);
 
 protected:
   OpCode code;
   Location *dst, *op1, *op2;
+
 public:
   BinaryOp(OpCode c, Location *dst, Location *op1, Location *op2);
   void EmitSpecific(Mips *mips);
+  Location *GetOp1() const { return op1; }
+  Location *GetOp2() const { return op2; }
+  Location *GetDestination() const { return dst; }
 };
 
-class Label: public Instruction {
+class Label : public Instruction {
   const char *label;
+
 public:
   Label(const char *label);
   void Print();
   void EmitSpecific(Mips *mips);
-  const char* text() const { return label; }
+  const char *text() const { return label; }
 };
 
-class Goto: public Instruction {
+class Goto : public Instruction {
   const char *label;
+
 public:
   Goto(const char *label);
   void EmitSpecific(Mips *mips);
-  const char* branch_label() const { return label; }
+  const char *branch_label() const { return label; }
 };
 
-class IfZ: public Instruction {
+class IfZ : public Instruction {
   Location *test;
   const char *label;
+
 public:
   IfZ(Location *test, const char *label);
   void EmitSpecific(Mips *mips);
-  const char* branch_label() const { return label; }
+  const char *branch_label() const { return label; }
+  Location *GetLocation() const { return test; }
 };
 
-class BeginFunc: public Instruction {
+class BeginFunc : public Instruction {
   int frameSize;
+
 public:
   BeginFunc();
   // used to backpatch the instruction with frame size once known
@@ -199,56 +216,67 @@ public:
   void EmitSpecific(Mips *mips);
 };
 
-class EndFunc: public Instruction {
+class EndFunc : public Instruction {
 public:
   EndFunc();
   void EmitSpecific(Mips *mips);
 };
 
-class Return: public Instruction {
+class Return : public Instruction {
   Location *val;
+
 public:
   Return(Location *val);
   void EmitSpecific(Mips *mips);
+  Location *GetLocation() const { return val; }
 };
 
-class PushParam: public Instruction {
+class PushParam : public Instruction {
   Location *param;
+
 public:
   PushParam(Location *param);
   void EmitSpecific(Mips *mips);
+  Location *GetLocation() const { return param; }
 };
 
-class PopParams: public Instruction {
+class PopParams : public Instruction {
   int numBytes;
+
 public:
   PopParams(int numBytesOfParamsToRemove);
   void EmitSpecific(Mips *mips);
 };
 
-class LCall: public Instruction {
+class LCall : public Instruction {
   const char *label;
   Location *dst;
+
 public:
   LCall(const char *labe, Location *result);
   void EmitSpecific(Mips *mips);
+  const char *branch_label() const { return label; }
+  Location *GetLocation() const { return dst; }
 };
 
-class ACall: public Instruction {
+class ACall : public Instruction {
   Location *dst, *methodAddr;
+
 public:
   ACall(Location *meth, Location *result);
   void EmitSpecific(Mips *mips);
+  Location *GetLocation() const { return dst; }
+  Location *GetAddress() const { return methodAddr; }
 };
 
-class VTable: public Instruction {
+class VTable : public Instruction {
   List<const char *> *methodLabels;
   const char *label;
+
 public:
   VTable(const char *labelForTable, List<const char *> *methodLabels);
   void Print();
   void EmitSpecific(Mips *mips);
 };
-
 
 #endif

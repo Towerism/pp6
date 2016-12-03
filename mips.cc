@@ -1,40 +1,37 @@
- /* File: mips.cc
- * -------------
- * Implementation of Mips class, which is responsible for TAC->MIPS
- * translation, register allocation, etc.
- *
- * Julie Zelenski academic year 2001-02 for CS143
- * Loosely based on some earlier work by Steve Freund
- *
- * A simple final code generator to translate Tac to MIPS.
- * It uses simplistic algorithms, in particular, its register handling
- * and spilling strategy is inefficient to the point of begin mocked
- * by elementary school children.
- *
- * Dan Bentley, April 2002
- * A simpler final code generator to translate Tac to MIPS.
- * It uses algorithms without loops or conditionals, to make there be a
- * very clear and obvious translation between one and the other.
- * Specifically, it always loads operands off stacks, and stores the
- * result back.  This breaks bad code immediately, theoretically helping
- * students.
- */
+/* File: mips.cc
+* -------------
+* Implementation of Mips class, which is responsible for TAC->MIPS
+* translation, register allocation, etc.
+*
+* Julie Zelenski academic year 2001-02 for CS143
+* Loosely based on some earlier work by Steve Freund
+*
+* A simple final code generator to translate Tac to MIPS.
+* It uses simplistic algorithms, in particular, its register handling
+* and spilling strategy is inefficient to the point of begin mocked
+* by elementary school children.
+*
+* Dan Bentley, April 2002
+* A simpler final code generator to translate Tac to MIPS.
+* It uses algorithms without loops or conditionals, to make there be a
+* very clear and obvious translation between one and the other.
+* Specifically, it always loads operands off stacks, and stores the
+* result back.  This breaks bad code immediately, theoretically helping
+* students.
+*/
 
 #include "mips.h"
-#include <stdarg.h>
 #include <cstring>
 #include <iostream>
-
+#include <stdarg.h>
 
 // Helper to check if two variable locations are one and the same
 // (same name, segment, and offset)
-static bool LocationsAreSame(Location *var1, Location *var2)
-{
+static bool LocationsAreSame(Location *var1, Location *var2) {
   return (var1 == var2 ||
-          (var1 && var2
-           && !strcmp(var1->GetName(), var2->GetName())
-           && var1->GetSegment()  == var2->GetSegment()
-           && var1->GetOffset() == var2->GetOffset()));
+          (var1 && var2 && !strcmp(var1->GetName(), var2->GetName()) &&
+           var1->GetSegment() == var2->GetSegment() &&
+           var1->GetOffset() == var2->GetOffset()));
 }
 
 /* Method: SpillRegister
@@ -42,57 +39,53 @@ static bool LocationsAreSame(Location *var1, Location *var2)
  * Used to spill a register from reg to dst.  All it does is emit a store
  * from that register to its location on the stack.
  */
-void Mips::SpillRegister(Location *dst, Register reg)
-{
-  if (!dst)
+void Mips::SpillRegister(Location *dst, Register reg, bool livenessOverride) {
+  if ((!dst || IsDead(reg)) && !livenessOverride)
     return;
   if (regs[reg].isDirty) {
-    const char *offsetFromWhere = dst->GetSegment() == fpRelative? regs[fp].name : regs[gp].name;
+    const char *offsetFromWhere =
+        dst->GetSegment() == fpRelative ? regs[fp].name : regs[gp].name;
     Assert(dst->GetOffset() % 4 == 0); // all variables are 4 bytes in size
     Emit("sw %s, %d(%s)\t# spill %s from %s to %s%+d", regs[reg].name,
          dst->GetOffset(), offsetFromWhere, dst->GetName(), regs[reg].name,
-         offsetFromWhere,dst->GetOffset());
+         offsetFromWhere, dst->GetOffset());
   }
   ResetRegister(reg);
 }
 
-void Mips::SpillRegisters()
-{
+void Mips::SpillRegisters() {
   for (Register r = t0; r <= t9; r = Register(r + 1))
     SpillRegister(regs[r].var, r);
 }
 
-void Mips::SpillFallbackRegisters()
-{
+void Mips::SpillFallbackRegisters() {
   for (Register r = t0; r <= t2; r = Register(r + 1))
     SpillRegister(regs[r].var, r);
 }
 
-Mips::Register Mips::AllocateRegister(Location *loc, bool setDirty, bool requiresLoad) {
-  Register r = GetRegister(loc);
+Mips::Register Mips::AllocateRegister(Location *loc, Register fallback, bool setDirty,
+                                      bool requiresLoad) {
+  Register r = GetRegister(loc, fallback);
   if (regs[r].var != loc) {
     if (requiresLoad)
       FillRegister(loc, r);
     SetRegisterLocation(r, loc);
+    SetRegisterClean(r);
   }
   if (setDirty)
     SetRegisterDirty(r);
   return r;
 }
 
-Mips::Register Mips::GetRegister(Location *loc)
-{
-  if (loc)
-    for (Register r = t0; r <= t9; r = Register(r + 1))
-      if (regs[r].var == loc)
-        return r;
+Mips::Register Mips::GetRegister(Location *loc, Register fallback) {
+  for (Register r = t0; r <= t9; r = Register(r + 1))
+    if (regs[r].var == loc)
+      return r;
   for (Register r = t3; r <= t9; r = Register(r + 1))
-    if (regs[r].var == NULL)
+    if (regs[r].var == NULL || IsDead(r))
       return r;
-  for (Register r = t0; r <= t2; r = Register(r + 1))
-    if (regs[r].var == NULL)
-      return r;
-  return t2;
+  SpillRegister(regs[fallback].var, fallback, true);
+  return fallback;
 }
 
 /* Method: FillRegister
@@ -100,14 +93,26 @@ Mips::Register Mips::GetRegister(Location *loc)
  * Fill a register from location src into reg.
  * Simply load a word into a register.
  */
-void Mips::FillRegister(Location *src, Register reg)
-{
+void Mips::FillRegister(Location *src, Register reg) {
   Assert(src);
-  const char *offsetFromWhere = src->GetSegment() == fpRelative? regs[fp].name : regs[gp].name;
+  const char *offsetFromWhere =
+      src->GetSegment() == fpRelative ? regs[fp].name : regs[gp].name;
   Assert(src->GetOffset() % 4 == 0); // all variables are 4 bytes in size
   Emit("lw %s, %d(%s)\t# fill %s to %s from %s%+d", regs[reg].name,
        src->GetOffset(), offsetFromWhere, src->GetName(), regs[reg].name,
-       offsetFromWhere,src->GetOffset());
+       offsetFromWhere, src->GetOffset());
+}
+
+bool Mips::IsDead(Register reg) {
+  bool is_dead = false;
+  if (liveVariableAnalysis) {
+    auto out = liveVariableAnalysis->data_out(currentInstruction);
+    if (!out.empty() && out.find(regs[reg].var) == out.end()) {
+      is_dead = true;
+      ResetRegister(reg);
+    }
+  }
+  return is_dead;
 }
 
 /* Method: Emit
@@ -116,18 +121,20 @@ void Mips::FillRegister(Location *src, Register reg)
  * a reasonable tidy manner.  Takes printf-style formatting strings
  * and variable arguments.
  */
-void Mips::Emit(const char *fmt, ...)
-{
+void Mips::Emit(const char *fmt, ...) {
   va_list args;
   char buf[1024];
 
   va_start(args, fmt);
   vsprintf(buf, fmt, args);
   va_end(args);
-  if (buf[strlen(buf) - 1] != ':') printf("\t"); // don't tab in labels
-  if (buf[0] != '#') printf("  ");   // outdent comments a little
+  if (buf[strlen(buf) - 1] != ':')
+    printf("\t"); // don't tab in labels
+  if (buf[0] != '#')
+    printf("  "); // outdent comments a little
   printf("%s", buf);
-  if (buf[strlen(buf)-1] != '\n') printf("\n"); // end with a newline
+  if (buf[strlen(buf) - 1] != '\n')
+    printf("\n"); // end with a newline
 }
 
 /* Method: EmitLoadConstant
@@ -136,12 +143,10 @@ void Mips::Emit(const char *fmt, ...)
  * a register (using GetRegister above) and then emits an li (load
  * immediate) instruction with the constant value.
  */
-void Mips::EmitLoadConstant(Location *dst, int val)
-{
-  Register r = AllocateRegister(dst, true, false);
-  Emit("li %s, %d\t\t# load constant value %d into %s", regs[r].name,
-       val, val, regs[r].name);
-  SpillFallbackRegisters();
+void Mips::EmitLoadConstant(Location *dst, int val) {
+  Register r = AllocateRegister(dst, rd, true, false);
+  Emit("li %s, %d\t\t# load constant value %d into %s", regs[r].name, val, val,
+       regs[r].name);
 }
 
 /* Method: EmitLoadStringConstant
@@ -151,8 +156,7 @@ void Mips::EmitLoadConstant(Location *dst, int val)
  * data segment and assigns it a unique label. Saves dst into a register
  * and loads that label address into the register.
  */
-void Mips::EmitLoadStringConstant(Location *dst, const char *str)
-{
+void Mips::EmitLoadStringConstant(Location *dst, const char *str) {
   static int strNum = 1;
   char label[16];
   sprintf(label, "_string%d", strNum++);
@@ -162,17 +166,14 @@ void Mips::EmitLoadStringConstant(Location *dst, const char *str)
   EmitLoadLabel(dst, label);
 }
 
-
 /* Method: EmitLoadLabel
  * ---------------------
  * Used to load a label (ie address in text/data segment) into a variable.
  * Saves dst into a register and emits an la (load address) instruction
  */
-void Mips::EmitLoadLabel(Location *dst, const char *label)
-{
-  Register r = AllocateRegister(dst, true, false);
+void Mips::EmitLoadLabel(Location *dst, const char *label) {
+  Register r = AllocateRegister(dst, rd, true, false);
   Emit("la %s, %s\t# load label", regs[r].name, label);
-  SpillFallbackRegisters();
 }
 
 /* Method: EmitCopy
@@ -181,14 +182,11 @@ void Mips::EmitLoadLabel(Location *dst, const char *label)
  * src and dst into registers and then emits a move instruction to
  * copy the contents from src to dst.
  */
-void Mips::EmitCopy(Location *dst, Location *src)
-{
-  Register r1 = AllocateRegister(src);
-  Register r2 = AllocateRegister(dst, true);
+void Mips::EmitCopy(Location *dst, Location *src) {
+  Register r1 = AllocateRegister(src, rs);
+  Register r2 = AllocateRegister(dst, rd, true);
   Emit("move %s, %s\t#copy", regs[r2].name, regs[r1].name);
-  SpillFallbackRegisters();
 }
-
 
 /* Method: EmitLoad
  * ----------------
@@ -198,15 +196,12 @@ void Mips::EmitCopy(Location *dst, Location *src)
  * using constant-offset addressing mode y(rx) which accesses the address
  * at an offset of y bytes from the address currently contained in rx.
  */
-void Mips::EmitLoad(Location *dst, Location *reference, int offset)
-{
-  Register r1 = AllocateRegister(reference);
-  Register r2 = AllocateRegister(dst, true, false);
-  Emit("lw %s, %d(%s) \t# load with offset", regs[r2].name,
-       offset, regs[r1].name);
-  SpillFallbackRegisters();
+void Mips::EmitLoad(Location *dst, Location *reference, int offset) {
+  Register r1 = AllocateRegister(reference, rs);
+  Register r2 = AllocateRegister(dst, rd, true, false);
+  Emit("lw %s, %d(%s) \t# load with offset", regs[r2].name, offset,
+       regs[r1].name);
 }
-
 
 /* Method: EmitStore
  * -----------------
@@ -216,15 +211,13 @@ void Mips::EmitLoad(Location *dst, Location *reference, int offset)
  * using constant-offset addressing mode y(rx) which writes to the address
  * at an offset of y bytes from the address currently contained in rx.
  */
-void Mips::EmitStore(Location *reference, Location *value, int offset)
-{
-  Register r1 = AllocateRegister(value);
-  Register r2 = AllocateRegister(reference, true);
-  Emit("sw %s, %d(%s) \t# store with offset",
-       regs[r1].name, offset, regs[r2].name);
-  SpillFallbackRegisters();
+void Mips::EmitStore(Location *reference, Location *value, int offset) {
+  Register r1 = AllocateRegister(value, rs);
+  Register r2 = AllocateRegister(reference, rd);
+  Emit("sw %s, %d(%s) \t# store with offset", regs[r1].name, offset,
+       regs[r2].name);
+  SetRegisterClean(r1);
 }
-
 
 /* Method: EmitBinaryOp
  * --------------------
@@ -234,18 +227,14 @@ void Mips::EmitStore(Location *reference, Location *value, int offset)
  * emits the appropriate instruction by looking up the mips name
  * for the particular op code.
  */
-void Mips::EmitBinaryOp(BinaryOp::OpCode code, Location *dst,
-                        Location *op1, Location *op2)
-{
-  Register r1 = AllocateRegister(op1);
-  Register r2 = AllocateRegister(op2);
-  Register r3 = AllocateRegister(NULL, true, false);
-  SetRegisterLocation(r3, dst);
-  Emit("%s %s, %s, %s\t", NameForTac(code), regs[r3].name,
-       regs[r1].name, regs[r2].name);
-  SpillFallbackRegisters();
+void Mips::EmitBinaryOp(BinaryOp::OpCode code, Location *dst, Location *op1,
+                        Location *op2) {
+  Register r1 = AllocateRegister(op1, rs);
+  Register r2 = AllocateRegister(op2, rt);
+  Register r3 = AllocateRegister(dst, rd, true, false);
+  Emit("%s %s, %s, %s\t", NameForTac(code), regs[r3].name, regs[r1].name,
+       regs[r2].name);
 }
-
 
 /* Method: EmitLabel
  * -----------------
@@ -254,12 +243,10 @@ void Mips::EmitBinaryOp(BinaryOp::OpCode code, Location *dst,
  * starts new basic block), and rather than try to be clever, we just
  * wipe the slate clean.
  */
-void Mips::EmitLabel(const char *label)
-{
+void Mips::EmitLabel(const char *label) {
   SpillRegisters();
   Emit("%s:", label);
 }
-
 
 /* Method: EmitGoto
  * ----------------
@@ -268,12 +255,10 @@ void Mips::EmitLabel(const char *label)
  * we are heading to (ie this ends current basic block) and rather than
  * try to be clever, we just wipe slate clean.
  */
-void Mips::EmitGoto(const char *label)
-{
+void Mips::EmitGoto(const char *label) {
   SpillRegisters();
   Emit("b %s\t\t# unconditional branch", label);
 }
-
 
 /* Method: EmitIfZ
  * ---------------
@@ -282,14 +267,12 @@ void Mips::EmitGoto(const char *label)
  * either beqz. See comments above on Goto for why we spill
  * all registers here.
  */
-void Mips::EmitIfZ(Location *test, const char *label)
-{
-  Register r = AllocateRegister(test, true);
+void Mips::EmitIfZ(Location *test, const char *label) {
+  Register r = AllocateRegister(test, rs);
   SpillRegisters();
   Emit("beqz %s, %s\t# branch if %s is zero ", regs[r].name, label,
        test->GetName());
 }
-
 
 /* Method: EmitParam
  * -----------------
@@ -298,14 +281,11 @@ void Mips::EmitIfZ(Location *test, const char *label)
  * register and then stores contents to location just made at end of
  * stack.
  */
-void Mips::EmitParam(Location *arg)
-{
-  Register r = AllocateRegister(arg);
+void Mips::EmitParam(Location *arg) {
+  Register r = AllocateRegister(arg, rs);
   Emit("subu $sp, $sp, 4\t# decrement sp to make space for param");
   Emit("sw %s, 4($sp)\t# copy param value to stack", regs[r].name);
-  SpillFallbackRegisters();
 }
-
 
 /* Method: EmitCallInstr
  * ---------------------
@@ -318,27 +298,22 @@ void Mips::EmitParam(Location *arg)
  * the var to a register and copy function return value from $v0 into that
  * register.
  */
-void Mips::EmitCallInstr(Location *result, const char *fn, bool isLabel)
-{
+void Mips::EmitCallInstr(Location *result, const char *fn, bool isLabel) {
   SpillRegisters();
-  Emit("%s %-15s\t# jump to function", isLabel? "jal": "jalr", fn);
+  Emit("%s %-15s\t# jump to function", isLabel ? "jal" : "jalr", fn);
   if (result != NULL) {
-    Register r = AllocateRegister(result, true, false);
-    Emit("move %s, %s\t\t# copy function return value from $v0",
-         regs[r].name, regs[v0].name);
+    Register r = AllocateRegister(result, rd, true, false);
+    Emit("move %s, %s\t\t# copy function return value from $v0", regs[r].name,
+         regs[v0].name);
   }
-  SpillFallbackRegisters();
 }
 
-
-void Mips::EmitLCall(Location *dst, const char *label)
-{
+void Mips::EmitLCall(Location *dst, const char *label) {
   EmitCallInstr(dst, label, true);
 }
 
-void Mips::EmitACall(Location *dst, Location *fn)
-{
-  Register r = AllocateRegister(fn);
+void Mips::EmitACall(Location *dst, Location *fn) {
+  Register r = AllocateRegister(fn, rs);
   EmitCallInstr(dst, regs[r].name, false);
 }
 
@@ -346,12 +321,10 @@ void Mips::EmitACall(Location *dst, Location *fn)
  * We remove all parameters from the stack after a completed call
  * by adjusting the stack pointer upwards.
  */
-void Mips::EmitPopParams(int bytes)
-{
+void Mips::EmitPopParams(int bytes) {
   if (bytes != 0)
     Emit("add $sp, $sp, %d\t# pop params off stack", bytes);
 }
-
 
 /* Method: EmitReturn
  * ------------------
@@ -368,21 +341,17 @@ void Mips::EmitPopParams(int bytes)
  * $fp and $ra so everything is returned to the state we entered.
  * We then emit jr to jump to the saved $ra.
  */
-void Mips::EmitReturn(Location *returnVal)
-{
-  if (returnVal != NULL)
-    {
-      Register r = AllocateRegister(returnVal);
-      Emit("move $v0, %s\t\t# assign return value into $v0",
-           regs[r].name);
-    }
+void Mips::EmitReturn(Location *returnVal) {
+  if (returnVal != NULL) {
+    Register r = AllocateRegister(returnVal, rd);
+    Emit("move $v0, %s\t\t# assign return value into $v0", regs[r].name);
+  }
   SpillRegisters();
   Emit("move $sp, $fp\t\t# pop callee frame off stack");
   Emit("lw $ra, -4($fp)\t# restore saved ra");
   Emit("lw $fp, 0($fp)\t# restore saved fp");
   Emit("jr $ra\t\t# return from function");
 }
-
 
 /* Method: EmitBeginFunction
  * -------------------------
@@ -392,8 +361,7 @@ void Mips::EmitReturn(Location *returnVal)
  * going to change them), then set up the $fp and bump the $sp down
  * to make space for all our locals/temps.
  */
-void Mips::EmitBeginFunction(int stackFrameSize)
-{
+void Mips::EmitBeginFunction(int stackFrameSize) {
   Assert(stackFrameSize >= 0);
   Emit("subu $sp, $sp, 8\t# decrement sp to make space to save ra, fp");
   Emit("sw $fp, 8($sp)\t# save fp");
@@ -405,20 +373,16 @@ void Mips::EmitBeginFunction(int stackFrameSize)
          stackFrameSize);
 }
 
-
 /* Method: EmitEndFunction
  * -----------------------
  * Used to end the body of a function. Does an implicit return in fall off
  * case to clean up stack frame, return to caller etc. See comments on
  * EmitReturn above.
  */
-void Mips::EmitEndFunction()
-{
+void Mips::EmitEndFunction() {
   Emit("# (below handles reaching end of fn body with no explicit return)");
   EmitReturn(NULL);
 }
-
-
 
 /* Method: EmitVTable
  * ------------------
@@ -426,8 +390,7 @@ void Mips::EmitEndFunction()
  * entry in data segment, emits label, and lays out the function
  * labels one after another.
  */
-void Mips::EmitVTable(const char *label, List<const char*> *methodLabels)
-{
+void Mips::EmitVTable(const char *label, List<const char *> *methodLabels) {
   Emit(".data");
   Emit(".align 2");
   Emit("%s:\t\t# label for class %s vtable", label, label);
@@ -436,21 +399,18 @@ void Mips::EmitVTable(const char *label, List<const char*> *methodLabels)
   Emit(".text");
 }
 
-
 /* Method: EmitPreamble
  * --------------------
  * Used to emit the starting sequence needed for a program. Not much
  * here, but need to indicate what follows is in text segment and
  * needs to be aligned on word boundary. main is our only global symbol.
  */
-void Mips::EmitPreamble()
-{
+void Mips::EmitPreamble() {
   Emit("# standard Decaf preamble ");
   Emit(".text");
   Emit(".align 2");
   Emit(".globl main");
 }
-
 
 /* Method: NameForTac
  * ------------------
@@ -458,9 +418,8 @@ void Mips::EmitPreamble()
  * a given BinaryOp:OpCode (BinaryOp::Add, BinaryOp:Equals, etc.).
  * Asserts if asked for name of an unset/out of bounds code.
  */
-const char *Mips::NameForTac(BinaryOp::OpCode code)
-{
-  Assert(code >=0 && code < BinaryOp::NumOps);
+const char *Mips::NameForTac(BinaryOp::OpCode code) {
+  Assert(code >= 0 && code < BinaryOp::NumOps);
   const char *name = mipsName[code];
   Assert(name != NULL);
   return name;
@@ -513,6 +472,8 @@ Mips::Mips() {
   regs[s5] = (RegContents){false, NULL, "$s5", true};
   regs[s6] = (RegContents){false, NULL, "$s6", true};
   regs[s7] = (RegContents){false, NULL, "$s7", true};
+  rs = t0;
+  rt = t1;
+  rd = t2;
 }
 const char *Mips::mipsName[BinaryOp::NumOps];
-
