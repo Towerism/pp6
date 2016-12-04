@@ -10,11 +10,11 @@ LiveVariablesT LiveVariable::top() { return init(); }
 
 LiveVariablesT LiveVariable::effect(const Instruction *instr,
                                     const LiveVariablesT &in) {
-  LiveVariablesT result = in;
+  LiveVariablesT out = in;
   Effector *effector = EffectorFactory::MakeEffector(instr);
   if (effector)
-    effector->effect(result);
-  return result;
+    effector->effect(out);
+  return out;
 }
 
 LiveVariablesT LiveVariable::meet(const LiveVariablesT &a,
