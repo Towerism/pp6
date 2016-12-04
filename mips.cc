@@ -40,7 +40,7 @@ static bool LocationsAreSame(Location *var1, Location *var2) {
  * from that register to its location on the stack.
  */
 void Mips::SpillRegister(Location *dst, Register reg, bool livenessOverride) {
-  if ((!dst || IsDead(reg)) && !livenessOverride)
+  if ((!dst || !IsLive(reg)) && !livenessOverride)
     return;
   if (regs[reg].isDirty) {
     const char *offsetFromWhere =
@@ -63,8 +63,8 @@ void Mips::SpillFallbackRegisters() {
     SpillRegister(regs[r].var, r);
 }
 
-Mips::Register Mips::AllocateRegister(Location *loc, Register fallback, bool setDirty,
-                                      bool requiresLoad) {
+Mips::Register Mips::AllocateRegister(Location *loc, Register fallback,
+                                      bool setDirty, bool requiresLoad) {
   Register r = GetRegister(loc, fallback);
   if (regs[r].var != loc) {
     if (requiresLoad)
@@ -82,7 +82,7 @@ Mips::Register Mips::GetRegister(Location *loc, Register fallback) {
     if (regs[r].var == loc)
       return r;
   for (Register r = t3; r <= t9; r = Register(r + 1))
-    if (regs[r].var == NULL || IsDead(r))
+    if (regs[r].var == NULL || !IsLive(r))
       return r;
   SpillRegister(regs[fallback].var, fallback, true);
   return fallback;
@@ -103,16 +103,15 @@ void Mips::FillRegister(Location *src, Register reg) {
        offsetFromWhere, src->GetOffset());
 }
 
-bool Mips::IsDead(Register reg) {
-  bool is_dead = false;
-  if (liveVariableAnalysis) {
-    auto out = liveVariableAnalysis->data_out(currentInstruction);
-    if (!out.empty() && out.find(regs[reg].var) == out.end()) {
-      is_dead = true;
-      ResetRegister(reg);
-    }
+bool Mips::IsLive(Register reg) {
+  if (!liveVariableAnalysis)
+    return true;
+  auto out = liveVariableAnalysis->data_out(currentInstruction);
+  if (out.find(regs[reg].var) == out.end() && !out.empty()) {
+    ResetRegister(reg);
+    return false;
   }
-  return is_dead;
+  return true;
 }
 
 /* Method: Emit

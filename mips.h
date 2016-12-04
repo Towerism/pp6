@@ -55,7 +55,7 @@ private:
   void SetRegisterClean(Register reg) { regs[reg].isDirty = false; }
   void SetRegisterLocation(Register reg, Location *loc) { regs[reg].var = loc; }
   void ResetRegister(Register reg) { SetRegisterClean(reg), SetRegisterLocation(reg, NULL); }
-  bool IsDead(Register reg);
+  bool IsLive(Register reg);
 
   void EmitCallInstr(Location *dst, const char *fn, bool isL);
 
