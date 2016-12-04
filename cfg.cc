@@ -30,18 +30,14 @@ void ControlFlowGraph::map_edges() {
     iterator next = cur;
     ++next;
 
-    IfZ *isifz = dynamic_cast<IfZ *>(*cur);
-    Goto *isgoto = dynamic_cast<Goto *>(*cur);
-    bool normal = (isifz == NULL && isgoto == NULL);
+    IfZ *is_ifz = dynamic_cast<IfZ *>(*cur);
+    Goto *is_goto = dynamic_cast<Goto *>(*cur);
 
-    if (normal) {
-      add_edge(*cur, *next);
-    } else if (isgoto != NULL) {
-      add_edge(*cur, instr_for_label[isgoto->branch_label()]);
-    } else if (isifz != NULL) {
-      add_edge(*cur, *next);
-      add_edge(*cur, instr_for_label[isifz->branch_label()]);
-    }
+    if (is_ifz)
+      add_edge(*cur, instr_for_label[is_ifz->branch_label()]);
+    else if (is_goto)
+      add_edge(*cur, instr_for_label[is_goto->branch_label()]);
+    add_edge(*cur, *next);
   }
 }
 
