@@ -57,6 +57,8 @@ void Mips::SpillIfGlobal(Register reg) {
   auto location = regs[reg].var;
   if (location && location->GetSegment() == gpRelative)
     SpillRegister(regs[reg].var, reg);
+  else
+    ResetRegister(reg);
 }
 
 void Mips::SpillGlobals() {
@@ -114,11 +116,14 @@ void Mips::FillRegister(Location *src, Register reg) {
        offsetFromWhere, src->GetOffset());
 }
 
-bool Mips::IsLive(Register reg) {
+bool Mips::IsLive(Register reg)  {
   if (!liveVariableAnalysis)
     return true;
   auto out = liveVariableAnalysis->data_out(currentInstruction);
-  return out.find(regs[reg].var) != out.end() || out.empty();
+  auto live = out.find(regs[reg].var) != out.end() || out.empty();
+  if (!live)
+    ResetRegister(reg);
+  return live;
 }
 
 /* Method: Emit
