@@ -1,0 +1,54 @@
+#+AUTHOR: Martin Fracker
+#+TITLE: Caching Analysis
+* Introduction
+This document will eventually serve as the final analysis for this project. For
+now it serves as the analysis for the checkpoint. I will roughly analyze both
+Direct Mapped and MRU caching schemes for =sort.decaf=.
+
+* Direct Mapped and MRU
+** Sort.decaf
+   Due to the simplistic nature of how the direct mapped caching scheme maps
+   memory to the cache (i.e. it looks at the middle bits to select a set, and
+   the low bits to determine the block within that set), every few blocks
+   (perhaps words or double words depending on the size of each block) of
+   consecutive reads will cause a cache miss and for that particular set to be
+   loaded from memory. Since this consecutive reading of chunks closely
+   describes the memory access pattern characterized by insertion sort, I
+   think this is roughly what will be observed when running =sort.decaf= using a
+   direct mapped caching scheme. 
+
+   When the cache starts to run out of space and there is a cache miss, the MRU
+   replacement scheme dictates that the most recently used set will be replaced.
+   Because insertion sort will access the back of the array again after placing
+   an element towards the front of the array following comparisons of those
+   front elements, I expect that MRU will cause a not cause to many misses since
+   it retains older data in the cache which is a good characteristic when a
+   block of memory is being accessed in a looping sequential pattern. This can
+   be seen for the sake of example when the cache contains 2 cache lines each
+   containing 1 set with each set containing 1 block, and each block is large
+   enough to contain a third of the input. When the first element is to be
+   placed, the back of the array will be cached. As the algorithm moves the
+   element closer to the front, the middle of the array will be cached so that
+   now the cache is full. When the element is finally moved to its place in the
+   front of the array (assuming it originally belonged towards the front), the
+   front of the array will be cached replacing the most-recently-cached (-used)
+   middle. When the next iteration begins, the back of the array will still be
+   cached.
+
+   With my rough evaluation of Direct Mapped plus MRU, I would posit that,
+   because only two-thirds of the input can be in the cache at any given time
+   and given the cache situation above, about a third of the accesses to the
+   cache will be misses. This is actually what I observed in the caching
+   simulator (See Table [[tab:sort.dm.mru.pre]]. I provided a set of 20 unsorted numbers, 8 blocks, and a cache
+   line of 4 words. I assumed that a block is a word so that there would
+   effectively be two cache lines in the cache each able to hold 16 integers or
+   75% of the input (75% was the best I could do since cache sizes had to be
+   powers of 2).
+
+#+CAPTION: Shows the statistics after running =sort.decaf= through the cache simulator using 8 total blocks and a cache line size of 4 words.
+#+NAME: tab:sort.dm.mru.pre
+| Cache Accesses |   5059 |
+| Cache Hits     |   3513 |
+| Cache Misses   |   1546 |
+| Cache Hit Rate | 69.44% |
+
