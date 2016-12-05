@@ -53,6 +53,17 @@ void Mips::SpillRegister(Location *dst, Register reg, bool livenessOverride) {
   ResetRegister(reg);
 }
 
+void Mips::SpillIfGlobal(Register reg) {
+  auto location = regs[reg].var;
+  if (location && location->GetSegment() == gpRelative)
+    SpillRegister(regs[reg].var, reg);
+}
+
+void Mips::SpillGlobals() {
+  for (Register r = t0; r <= t9; r = Register(r + 1))
+    SpillIfGlobal(r);
+}
+
 void Mips::SpillRegisters() {
   for (Register r = t0; r <= t9; r = Register(r + 1))
     SpillRegister(regs[r].var, r);
@@ -107,11 +118,7 @@ bool Mips::IsLive(Register reg) {
   if (!liveVariableAnalysis)
     return true;
   auto out = liveVariableAnalysis->data_out(currentInstruction);
-  if (out.find(regs[reg].var) == out.end() && !out.empty()) {
-    ResetRegister(reg);
-    return false;
-  }
-  return true;
+  return out.find(regs[reg].var) != out.end() || out.empty();
 }
 
 /* Method: Emit
@@ -345,7 +352,7 @@ void Mips::EmitReturn(Location *returnVal) {
     Register r = AllocateRegister(returnVal, rd);
     Emit("move $v0, %s\t\t# assign return value into $v0", regs[r].name);
   }
-  SpillRegisters();
+  SpillGlobals();
   Emit("move $sp, $fp\t\t# pop callee frame off stack");
   Emit("lw $ra, -4($fp)\t# restore saved ra");
   Emit("lw $fp, 0($fp)\t# restore saved fp");

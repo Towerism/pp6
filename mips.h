@@ -46,6 +46,8 @@ private:
   typedef struct RegContents RegContents;
 
   void SpillRegister(Location *dst, Register reg, bool livenessOverride = false);
+  void SpillIfGlobal(Register reg);
+  void SpillGlobals();
   void SpillRegisters();
   void SpillFallbackRegisters();
   Register AllocateRegister(Location *loc, Register fallback, bool setDirty = false, bool requiresLoad = true);
