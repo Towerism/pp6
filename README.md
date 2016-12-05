@@ -30,14 +30,14 @@ are inside a function. Otherwise the cfg passed to `Mips` is `NULL` by default.
 ### `live_variable.cc`
 In `live_variable.cc` I implement the four virtual CFG functions. The
 implementations are straightforward. `Effect` being the most complicated of them
-using the static function `EffectorFactory::MakeEffector`, simply constructs
+using the static function `EffectorFactory::MakeEffector` simply constructs
 from the current TAC instruction an `Effector` which knows how to effect the
 variable set coming IN from the previous instruction. If the effector coming
 back from the factory method is `NULL`, then the IN variable set from the
 previous instruction is simply passed through to the next node.
 
 ### `effector*.cc`
-   In the `effector*.cc` files I provide the logic that maps intructions to KILL
+In the `effector*.cc` files I provide the logic that maps intructions to KILL
 (erase) and GEN/IN (insert) actions. `EffectorFactory::MakeFactory` encapsulates
 the logic of constructing the correct `Effector` given a TAC instruction.
 
