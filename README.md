@@ -5,8 +5,7 @@ from and immediately spilling to memory using registers t0-t2. The reason for
 choosing registers t0-t2 as fallback registers is that it is easier to spot
 those registers when reading the assembly. Register allocation using Live
 Variable Analysis is almost finished. The actual CFG algorithm is fully
-implemented, there is just some minor tweaks to be made in `mips.cc` such as
-only spilling global variables upon function return.
+implemented, there are just some minor tweaks to be made in `mips.cc`.
 
 ## Live Variable Analysis
 Live variable analysis is implemented in `cfg.cc`, `mips.cc`, `codegen.cc`,
