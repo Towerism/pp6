@@ -5,50 +5,329 @@ This document will eventually serve as the final analysis for this project. For
 now it serves as the analysis for the checkpoint. I will roughly analyze both
 Direct Mapped and MRU caching schemes for =sort.decaf=.
 
-* Direct Mapped and MRU
-** Sort.decaf
-   Due to the simplistic nature of how the direct mapped caching scheme maps
-   memory to the cache (i.e. it looks at the middle bits to select a set, and
-   the low bits to determine the block within that set), every few blocks
-   (perhaps words or double words depending on the size of each block) of
-   consecutive reads will cause a cache miss and for that particular set to be
-   loaded from memory. Since this consecutive reading of chunks closely
-   describes the memory access pattern characterized by insertion sort, I
-   think this is roughly what will be observed when running =sort.decaf= using a
-   direct mapped caching scheme. 
+* Sort.decaf
+** Direct Mapped
+    Due to the simplistic nature of how the direct mapped (DM) caching scheme maps
+    memory to the cache (i.e. it looks at the middle bits to select a set, and
+    the low bits to determine the block within that set), every few blocks
+    (perhaps words or double words depending on the size of each block) of consecutive reads will cause a cache miss and for that particular set to be
+    loaded from memory. Since this consecutive reading of chunks closely
+    describes the memory access pattern characterized by insertion sort, I
+    think this is roughly what will be observed when running =sort.decaf= using a
+    direct mapped caching scheme. 
 
-   When the cache starts to run out of space and there is a cache miss, the MRU
-   replacement scheme dictates that the most recently used set will be replaced.
-   Because insertion sort will access the back of the array again after placing
-   an element towards the front of the array following comparisons of those
-   front elements, I expect that MRU will cause a not cause to many misses since
-   it retains older data in the cache which is a good characteristic when a
-   block of memory is being accessed in a looping sequential pattern. This can
-   be seen for the sake of example when the cache contains 2 cache lines each
-   containing 1 set with each set containing 1 block, and each block is large
-   enough to contain a third of the input. When the first element is to be
-   placed, the back of the array will be cached. As the algorithm moves the
-   element closer to the front, the middle of the array will be cached so that
-   now the cache is full. When the element is finally moved to its place in the
-   front of the array (assuming it originally belonged towards the front), the
-   front of the array will be cached replacing the most-recently-cached (-used)
-   middle. When the next iteration begins, the back of the array will still be
-   cached.
+*** MRU
+    When the cache starts to run out of space and there is a cache miss, the MRU
+    replacement scheme dictates that the most recently used set will be replaced.
+    Because insertion sort will access the back of the array again after placing
+    an element towards the front of the array following comparisons of those
+    front elements, I expect that MRU will cause a not cause to many misses since
+    it retains older data in the cache which is a good characteristic when a
+    block of memory is being accessed in a looping sequential pattern. This can
+    be seen for the sake of example when the cache contains 2 cache lines each
+    containing 1 set with each set containing 1 block, and each block is large
+    enough to contain a third of the input. When the first element is to be
+    placed, the back of the array will be cached. As the algorithm moves the
+    element closer to the front, the middle of the array will be cached so that
+    now the cache is full. When the element is finally moved to its place in the
+    front of the array (assuming it originally belonged towards the front), the
+    front of the array will be cached replacing the most-recently-cached (-used)
+    middle. When the next iteration begins, the back of the array will still be
+    cached.
 
-   With my rough evaluation of Direct Mapped plus MRU, I would posit that,
-   because only two-thirds of the input can be in the cache at any given time
-   and given the cache situation above, about a third of the accesses to the
-   cache will be misses. This is actually what I observed in the caching
-   simulator (See Table [[tab:sort.dm.mru.pre]]. I provided a set of 20 unsorted numbers, 8 blocks, and a cache
-   line of 4 words. I assumed that a block is a word so that there would
-   effectively be two cache lines in the cache each able to hold 16 integers or
-   75% of the input (75% was the best I could do since cache sizes had to be
-   powers of 2).
+    With my rough evaluation of Direct Mapped plus MRU, I would posit that,
+    because only two-thirds of the input can be in the cache at any given time
+    and given the cache situation above, about a half of the accesses to the
+    cache will be misses since the access pattern of insertion sort is back and
+    forth. This is actually what I observed in the caching simulator.
 
-#+CAPTION: Shows the statistics after running =sort.decaf= through the cache simulator using 8 total blocks and a cache line size of 4 words.
-#+NAME: tab:sort.dm.mru.pre
-| Cache Accesses |   5059 |
-| Cache Hits     |   3513 |
-| Cache Misses   |   1546 |
-| Cache Hit Rate | 69.44% |
+    I performed three runs using direct mapped and MRU. In the first run, I
+    provided a set of 20 unsorted numbers, 2 blocks, and a words per block of 8
+    . This way there would effectively be two blocks each able to hold 8
+    integers or 75% of the input (75% was the best I could do since cache sizes
+    had to be powers of 2). In the second run, I made the words per block 16 in
+    order to double the amount of integers that needed to be swapped out at a
+    time. In the third run, I made words per block 4 so that only a third of the
+    input can be in the cache at once. See Tables
+    [[tab:sort.dm.mru.cl4]], [[tab:sort.dm.mru.cl2]], and [[tab:sort.dm.mru.cl1]] for the
+    results.
+ #+CAPTION: Shows the statistics after running =sort.decaf= through the cache simulator with DM and MRU using 2 total blocks and a cache line size of 8 words.
+ #+NAME: tab:sort.dm.mru.cl4
+ | Cache Accesses |   5059 |
+ | Cache Hits     |   2411 |
+ | Cache Misses   |   2648 |
+ | Cache Hit Rate | 47.66% |
 
+ #+CAPTION: Shows the statistics after running =sort.decaf= through the cache simulator with DM and MRU using 2 total blocks and a cache line size of 16 words.
+ #+NAME: tab:sort.dm.mru.cl2
+ | Cache Accesses |   5059 |
+ | Cache Hits     |   2704 |
+ | Cache Misses   |   2355 |
+ | Cache Hit Rate | 53.45% |
+
+ #+CAPTION: Shows the statistics after running =sort.decaf= through the cache simulator with DM and MRU  using 2 total blocks and a cache line size of 4 words.
+ #+NAME: tab:sort.dm.mru.cl1
+ | Cache Accesses |   5059 |
+ | Cache Hits     |   1546 |
+ | Cache Misses   |   3513 |
+ | Cache Hit Rate | 30.56% |
+
+*** LRU
+    Least recently used will select the least recently used cache line when a
+    replacement is necessary. Going with the same runs from before, I expect
+    the performance to be about the same. Due to the access pattern of insertion
+    sort, since the array will be accessed from towards the beginning of the array to
+    the end of the array back towards the beginning, evicting the least recently used cache
+    line will have the exact same affect on performance as evicting the most
+    recently used cache line. See Tables [[tab:sort.dm.lru.cl4]], [[tab:sort.dm.lru.cl2]], and
+    [[tab:sort.dm.lru.cl1]] for the results.
+ #+CAPTION: Shows the statistics after running =sort.decaf= through the cache simulator with DM and LRU using 2 total blocks and a cache line size of 8 words.
+ #+NAME: tab:sort.dm.lru.cl4
+ | Cache Accesses |   5059 |
+ | Cache Hits     |   2411 |
+ | Cache Misses   |   2648 |
+ | Cache Hit Rate | 47.66% |
+
+ #+CAPTION: Shows the statistics after running =sort.decaf= through the cache simulator with DM and LRU using 2 total blocks and a cache line size of 16 words.
+ #+NAME: tab:sort.dm.lru.cl2
+ | Cache Accesses |   5059 |
+ | Cache Hits     |   2704 |
+ | Cache Misses   |   2355 |
+ | Cache Hit Rate | 53.45% |
+
+ #+CAPTION: Shows the statistics after running =sort.decaf= through the cache simulator with DM and LRU using 2 total blocks and a cache line size of 4 words.
+ #+NAME: tab:sort.dm.lru.cl1
+ | Cache Accesses |   5059 |
+ | Cache Hits     |   1546 |
+ | Cache Misses   |   3513 |
+ | Cache Hit Rate | 30.56% |
+
+*** Random
+    Random will randomly select a cache line to evict. I expect performance to
+    be worse. See Tables [[tab:sort.dm.r.cl4]], [[tab:sort.dm.r.cl2]], and
+    [[tab:sort.dm.r.cl1]] for the results.
+ #+CAPTION: Shows the statistics after running =sort.decaf= through the cache simulator with DM and random using 2 total blocks and a cache line size of 8 words.
+ #+NAME: tab:sort.dm.r.cl4
+ | Cache Accesses |   5059 |
+ | Cache Hits     |   2411 |
+ | Cache Misses   |   2648 |
+ | Cache Hit Rate | 47.66% |
+
+ #+CAPTION: Shows the statistics after running =sort.decaf= through the cache simulator with DM and random using 2 total blocks and a cache line size of 16 words.
+ #+NAME: tab:sort.dm.r.cl2
+ | Cache Accesses |   5059 |
+ | Cache Hits     |   2704 |
+ | Cache Misses   |   2355 |
+ | Cache Hit Rate | 53.45% |
+
+ #+CAPTION: Shows the statistics after running =sort.decaf= through the cache simulator with DM and random using 2 total blocks and a cache line size of 4 words.
+ #+NAME: tab:sort.dm.r.cl1
+ | Cache Accesses |   5059 |
+ | Cache Hits     |   1546 |
+ | Cache Misses   |   3513 |
+ | Cache Hit Rate | 30.56% |
+
+** Fully Associative
+   Fully associative (FA) cache allows a tag to exist anywhere within the cache
+   regardless of its tag. This means that the hardware must look through all the
+   cache lines and compare their tags. This would lead to less unnecessary
+   eviction of cache lines (although in the real world, this is not very
+   practical).
+
+*** MRU
+    In general, MRU should be worse than LRU, because LRU evicts the least
+    recently used from the cache. And with the access pattern of insertion sort,
+    the most recently used is worse. See Tables [[tab:sort.fa.mru.cl4]], [[tab:sort.fa.mru.cl2]], and
+    [[tab:sort.fa.mru.cl1]] for the results.
+
+ #+CAPTION: Shows the statistics after running =sort.decaf= through the cache simulator with FA and MRU using 2 total blocks and a cache line size of 8 words.
+ #+NAME: tab:sort.fa.mru.cl4
+ | Cache Accesses |   5059 |
+ | Cache Hits     |   1933 |
+ | Cache Misses   |   3126 |
+ | Cache Hit Rate | 47.66% |
+
+ #+CAPTION: Shows the statistics after running =sort.decaf= through the cache simulator with FA and MRU using 2 total blocks and a cache line size of 16 words.
+ #+NAME: tab:sort.fa.mru.cl2
+ | Cache Accesses |   5059 |
+ | Cache Hits     |   2172 |
+ | Cache Misses   |   2887 |
+ | Cache Hit Rate | 42.93% |
+
+ #+CAPTION: Shows the statistics after running =sort.decaf= through the cache simulator with FA and MRU using 2 total blocks and a cache line size of 4 words.
+ #+NAME: tab:sort.fa.mru.cl1
+ | Cache Accesses |   5059 |
+ | Cache Hits     |   1330 |
+ | Cache Misses   |   3729 |
+ | Cache Hit Rate | 26.29% |
+
+*** LRU
+    In general, MRU should be worse than LRU, because LRU evicts the least
+    recently used from the cache. And with the access pattern of insertion sort,
+    the least recently used is better. See Tables [[tab:sort.fa.lru.cl4]], [[tab:sort.fa.lru.cl2]], and
+    [[tab:sort.fa.lru.cl1]] for the results.
+
+ #+CAPTION: Shows the statistics after running =sort.decaf= through the cache simulator with FA and LRU using 2 total blocks and a cache line size of 8 words.
+ #+NAME: tab:sort.fa.lru.cl4
+ | Cache Accesses |   5059 |
+ | Cache Hits     |   2344 |
+ | Cache Misses   |   2715 |
+ | Cache Hit Rate | 46.33% |
+
+ #+CAPTION: Shows the statistics after running =sort.decaf= through the cache simulator with FA and LRU using 2 total blocks and a cache line size of 16 words.
+ #+NAME: tab:sort.fa.lru.cl2
+ | Cache Accesses |   5059 |
+ | Cache Hits     |   2876 |
+ | Cache Misses   |   2183 |
+ | Cache Hit Rate | 56.85% |
+
+ #+CAPTION: Shows the statistics after running =sort.decaf= through the cache simulator with FA and LRU using 2 total blocks and a cache line size of 4 words.
+ #+NAME: tab:sort.fa.lru.cl1
+ | Cache Accesses |   5059 |
+ | Cache Hits     |   1506 |
+ | Cache Misses   |   3553 |
+ | Cache Hit Rate | 29.77% |
+
+*** Random
+    I expect random to be similar to LRU but not much better simply because,
+    even though the access pattern of insertion sort is not random and there is
+    no reason that it should benefit from a random replacement scheme, the cache
+    line size can get very small compared to the input size and so a random
+    eviction scheme may result in a better cache hit rate. See Tables [[tab:sort.fa.r.cl4]],
+    [[tab:sort.fa.r.cl2]], and [[tab:sort.fa.r.cl1]] for the results.
+
+ #+CAPTION: Shows the statistics after running =sort.decaf= through the cache simulator with FA and random using 2 total blocks and a cache line size of 8 words.
+ #+NAME: tab:sort.fa.r.cl4
+ | Cache Accesses |   5059 |
+ | Cache Hits     |   2366 |
+ | Cache Misses   |   2693 |
+ | Cache Hit Rate | 46.77% |
+
+ #+CAPTION: Shows the statistics after running =sort.decaf= through the cache simulator with FA and random using 2 total blocks and a cache line size of 16 words.
+ #+NAME: tab:sort.fa.r.cl2
+ | Cache Accesses |   5059 |
+ | Cache Hits     |   2951 |
+ | Cache Misses   |   2108 |
+ | Cache Hit Rate | 58.33% |
+
+ #+CAPTION: Shows the statistics after running =sort.decaf= through the cache simulator with FA and random using 2 total blocks and a cache line size of 4 words.
+ #+NAME: tab:sort.fa.r.cl1
+ | Cache Accesses |   5059 |
+ | Cache Hits     |   1531 |
+ | Cache Misses   |   3528 |
+ | Cache Hit Rate | 30.26% |
+
+** N-Way Associative
+   N-Way Associative (NWA) is like a hybrid of direct mapped and fully
+   associative. Rather than allowing an address to select any block in the cache
+   it can select any block within a set of blocks. In particular the set of
+   blocks is of size $N$. For the sake of simplicity we will keep the number of
+   sets per block consistent at 2. I posit that this scheme should perform worse
+   than fully associative but better than direct mapped.
+
+*** MRU
+    In general, MRU should be worse than LRU, because LRU evicts the least
+    recently used from the cache. And with the access pattern of insertion sort,
+    the most recently used is worse. See Tables [[tab:sort.nwa.mru.cl4]], [[tab:sort.nwa.mru.cl2]], and
+    [[tab:sort.nwa.mru.cl1]] for the results.
+
+ #+CAPTION: Shows the statistics after running =sort.decaf= through the cache simulator with NWA and MRU using 2 total blocks and a cache line size of 8 words.
+ #+NAME: tab:sort.nwa.mru.cl4
+ | Cache Accesses |   5059 |
+ | Cache Hits     |   1933 |
+ | Cache Misses   |   3126 |
+ | Cache Hit Rate | 38.21% |
+
+ #+CAPTION: Shows the statistics after running =sort.decaf= through the cache simulator with NWA and MRU using 2 total blocks and a cache line size of 16 words.
+ #+NAME: tab:sort.nwa.mru.cl2
+ | Cache Accesses |   5059 |
+ | Cache Hits     |   2172 |
+ | Cache Misses   |   2887 |
+ | Cache Hit Rate | 42.93% |
+
+ #+CAPTION: Shows the statistics after running =sort.decaf= through the cache simulator with NWA and MRU using 2 total blocks and a cache line size of 4 words.
+ #+NAME: tab:sort.nwa.mru.cl1
+ | Cache Accesses |   5059 |
+ | Cache Hits     |   1330 |
+ | Cache Misses   |   3729 |
+ | Cache Hit Rate | 26.29% |
+
+*** LRU
+    In general, MRU should be worse than LRU, because LRU evicts the least
+    recently used from the cache. And with the access pattern of insertion sort,
+    the least recently used is better. See Tables [[tab:sort.nwa.lru.cl4]], [[tab:sort.nwa.lru.cl2]], and
+    [[tab:sort.nwa.lru.cl1]] for the results.
+
+ #+CAPTION: Shows the statistics after running =sort.decaf= through the cache simulator with NWA and LRU using 2 total blocks and a cache line size of 8 words.
+ #+NAME: tab:sort.nwa.lru.cl4
+ | Cache Accesses |   5059 |
+ | Cache Hits     |   2344 |
+ | Cache Misses   |   2715 |
+ | Cache Hit Rate | 46.33% |
+
+ #+CAPTION: Shows the statistics after running =sort.decaf= through the cache simulator with NWA and LRU using 2 total blocks and a cache line size of 16 words.
+ #+NAME: tab:sort.nwa.lru.cl2
+ | Cache Accesses |   5059 |
+ | Cache Hits     |   2876 |
+ | Cache Misses   |   2183 |
+ | Cache Hit Rate | 56.85% |
+
+ #+CAPTION: Shows the statistics after running =sort.decaf= through the cache simulator with NWA and LRU using 2 total blocks and a cache line size of 4 words.
+ #+NAME: tab:sort.nwa.lru.cl1
+ | Cache Accesses |   5059 |
+ | Cache Hits     |   1506 |
+ | Cache Misses   |   3553 |
+ | Cache Hit Rate | 29.77% |
+
+*** Random
+    I expect random to be similar to LRU but not much better simply because,
+    even though the access pattern of insertion sort is not random and there is
+    no reason that it should benefit from a random replacement scheme, the cache
+    line size can get very small compared to the input size and so a random
+    eviction scheme may result in a better cache hit rate. See Tables [[tab:sort.nwa.r.cl4]],
+    [[tab:sort.nwa.r.cl2]], and [[tab:sort.nwa.r.cl1]] for the results.
+
+ #+CAPTION: Shows the statistics after running =sort.decaf= through the cache simulator with NWA and random using 2 total blocks and a cache line size of 8 words.
+ #+NAME: tab:sort.nwa.r.cl4
+ | Cache Accesses |   5059 |
+ | Cache Hits     |   2366 |
+ | Cache Misses   |   2693 |
+ | Cache Hit Rate | 46.77% |
+
+ #+CAPTION: Shows the statistics after running =sort.decaf= through the cache simulator with NWA and random using 2 total blocks and a cache line size of 16 words.
+ #+NAME: tab:sort.nwa.r.cl2
+ | Cache Accesses |   5059 |
+ | Cache Hits     |   2951 |
+ | Cache Misses   |   2108 |
+ | Cache Hit Rate | 58.33% |
+
+ #+CAPTION: Shows the statistics after running =sort.decaf= through the cache simulator with NWA and random using 2 total blocks and a cache line size of 4 words.
+ #+NAME: tab:sort.nwa.r.cl1
+ | Cache Accesses |   5059 |
+ | Cache Hits     |   1531 |
+ | Cache Misses   |   3528 |
+ | Cache Hit Rate | 30.26% |
+* Life.decaf 
+The maximum data set is 625. The minimum data set is 25. In each iteration, the
+algorithm accesses the element's neighbors in the grid. This could cause
+potentially a lot of misses since we would constantly be accessing multiple
+cache lines simultaneously. The access patterns dictates we use LRU replacement.
+Fully associative placement will ensure that we are not causing misses when the
+cache is not full. We want cache lines to be big enough to minimize the number
+of cache lines a single iteration crosses without trivializing the small input
+sizes. I think a cache line size of 16 would be reasonable. As for the number of
+blocks, I would go with 8. This way a sizeable portion of the large input could
+fit in the cache. In the case of the smaller input, there would be extra room
+for temporary variables. With the configuration listed in Table
+[[tab:game-of-life-configs]], the cache hit rate 89% across the board. Obviously
+increasing blocks and cache line size will make that number bigger. But with the
+reasons previously stated, I think it is already clear that fully associative
+paired with LRU is the best combination.
+#+CAPTION: The four different game of life configurations used.
+#+NAME: tab:game-of-life-configs
+|  X |  Y | Seed | Generations |
+|----+----+------+-------------|
+|  5 |  5 |  500 |           5 |
+|  5 |  5 |  500 |          25 |
+| 25 | 25 |  500 |           5 |
+| 25 | 25 |  500 |          25 |

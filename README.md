@@ -7,6 +7,9 @@ those registers when reading the assembly. Register allocation using Live
 Variable Analysis is almost finished. The actual CFG algorithm is fully
 implemented, there are just some minor tweaks to be made in `mips.cc`.
 
+## Analysis
+The cache analysis can be found in the analysis folder.
+
 ## Live Variable Analysis
 Live variable analysis is implemented in `cfg.cc`, `mips.cc`, `codegen.cc`,
 `live_variable.cc`, `effector.cc`, and `effector_factory.cc`. 
